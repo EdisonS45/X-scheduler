@@ -21,7 +21,7 @@ export default function MentorLoveNote() {
         </h2>
 
         <p className="text-slate-700 leading-relaxed mb-4 text-[1.05rem]">
-          The <span className="font-medium text-slate-900">X Scheduler</span> project began with an idea shared by my mentor — 
+          The <span className="font-medium text-slate-900">X Scheduler</span> project began with an idea shared by my brother — 
           something that sparked the start of many exciting projects ahead. 
           What you see here is just the beginning of where that inspiration can lead.
         </p>
