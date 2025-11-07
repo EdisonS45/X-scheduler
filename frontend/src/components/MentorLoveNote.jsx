@@ -33,8 +33,7 @@ export default function MentorLoveNote() {
 
         <div className="mt-4 border-t border-slate-200 pt-4">
           <p className="text-sm text-slate-500 italic">
-            — With gratitude and respect, <br />
-            <span className="font-medium text-slate-600 not-italic">Edison S</span>
+            — With gratitude and Love, <br />
           </p>
         </div>
       </div>
