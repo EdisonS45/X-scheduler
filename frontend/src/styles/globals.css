@@ -2,5 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
-html,body,#root { height: 100%; }
-body { @apply bg-slate-50 text-slate-900; }
+/* NEW: Modern Base Styling
+*/
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  body {
+    @apply bg-slate-100 text-slate-800;
+  }
+
+  /* Custom scrollbar for a cleaner look */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400;
+  }
+}

@@ -4,6 +4,7 @@ import Post from '../models/post.js'
 import Project from '../models/project.js'
 import { postToTwitter } from '../utils/twitterClient.js'
 
+// This map holds all active worker instances, keyed by projectId
 const activeWorkers = new Map();
 
 // --- Helper function to auto-stop worker and update project ---
@@ -26,6 +27,8 @@ const checkAndStopIfFinished = async (projectId) => {
 };
 // --- End of new helper ---
 
+
+// The core worker logic
 const createWorker = (projectId) => {
   const worker = new Worker(`queue_${projectId}`, async (job) => {
     const { postId, content } = job.data;
@@ -52,7 +55,14 @@ const createWorker = (projectId) => {
       console.log(`Successfully posted ${postId} for project ${projectId}`);
     
     } catch (err) {
-      console.error(`[Project: ${projectId}] Failed to post ${postId}. Error: ${err.message}`);
+      // --- UPDATED ERROR LOGGING ---
+      let errorReason = err.message;
+      if (err.code === 429 || (err.message && err.message.includes('429'))) {
+        errorReason = `Rate Limit Exceeded (429). This is likely the 50 posts/24-hour limit on the Twitter Free tier.`;
+      }
+      console.error(`[Project: ${projectId}] Failed to post ${postId}. Error: ${errorReason}`);
+      // ---
+      
       if (post) {
         post.status = 'failed';
         await post.save();
@@ -79,7 +89,9 @@ const createWorker = (projectId) => {
   return worker;
 };
 
-// --- No changes to the functions below ---
+/**
+ * Starts a worker for a specific project if one isn't already running.
+ */
 export const startWorker = (projectId) => {
   if (!activeWorkers.has(projectId)) {
     console.log(`Starting worker for project: ${projectId}`);
@@ -90,6 +102,9 @@ export const startWorker = (projectId) => {
   }
 };
 
+/**
+ * Stops and removes a worker for a specific project.
+ */
 export const stopWorker = async (projectId) => {
   if (activeWorkers.has(projectId)) {
     console.log(`Stopping worker for project: ${projectId}`);
@@ -101,6 +116,10 @@ export const stopWorker = async (projectId) => {
   }
 };
 
+/**
+ * Called on server boot to restart workers for projects that were
+ * previously in a 'running' state.
+ */
 export const startWorkersForRunningProjects = async () => {
   console.log('Restarting workers for all running projects...');
   try {

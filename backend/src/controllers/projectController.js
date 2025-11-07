@@ -4,7 +4,8 @@ import path from "path";
 import Project from "../models/project.js";
 import Post from "../models/post.js";
 import { Queue } from 'bullmq';
-import { redis } from '../config/redis.js';
+import { redis } from "../config/redis.js";
+import { stopWorker } from "../jobs/workerManager.js"; // Import stopWorker
 
 // --- Helper to check project ownership ---
 const getProjectAndCheckOwnership = async (projectId, userId) => {
@@ -18,6 +19,8 @@ const getProjectAndCheckOwnership = async (projectId, userId) => {
   return project;
 };
 
+// @desc    Create a new project
+// @route   POST /api/projects
 export const createProject = async (req, res) => {
   try {
     const {
@@ -50,10 +53,12 @@ export const createProject = async (req, res) => {
   }
 };
 
+// @desc    Upload CSV to a project
+// @route   POST /api/projects/:id/upload-csv
 export const uploadCsv = async (req, res) => {
   try {
     const projectId = req.params.id;
-    await getProjectAndCheckOwnership(projectId, req.user.id); // --- ADDED AUTH ---
+    await getProjectAndCheckOwnership(projectId, req.user.id);
 
     const filePath = req.file.path;
     const file = fs.createReadStream(filePath);
@@ -82,24 +87,42 @@ export const uploadCsv = async (req, res) => {
   }
 };
 
+// --- NEW Helper function for deleting a project's assets ---
+const deleteProjectAssets = async (projectId) => {
+  try {
+    // Stop worker if it's running
+    await stopWorker(projectId.toString());
+  } catch (err) {
+    // Log warning but continue deletion
+    console.warn(`Could not stop worker for ${projectId}: ${err.message}`);
+  }
+
+  // Obliterate queue
+  const queue = new Queue(`queue_${projectId}`, { connection: redis });
+  await queue.obliterate({ force: true });
+  await queue.close();
+  
+  // Delete all posts
+  await Post.deleteMany({ projectId });
+  
+  // Delete project-specific uploads directory
+  const projectDir = path.join("uploads", "projects", projectId.toString());
+  if (fs.existsSync(projectDir)) fs.rmSync(projectDir, { recursive: true });
+};
+// ---
+
+// @desc    Delete a single project
+// @route   DELETE /api/projects/:id
 export const deleteProject = async (req, res) => {
   try {
     const { id } = req.params;
-    const project = await getProjectAndCheckOwnership(id, req.user.id); // --- ADDED AUTH ---
+    await getProjectAndCheckOwnership(id, req.user.id);
 
-    // Get queue and stop worker *before* deleting
-    const queue = new Queue(`queue_${id}`, { connection: redis });
-    await queue.obliterate({ force: true }); // Remove all jobs, etc.
-    await queue.close();
-    // Assuming worker is stopped via a separate call or manager
-    // For simplicity here, we just wipe the queue.
-    // The new schedulerController handles stopping the worker.
-
-    await Project.findByIdAndDelete(id);
-    await Post.deleteMany({ projectId: id });
+    // Use the new helper
+    await deleteProjectAssets(id);
     
-    const projectDir = path.join("uploads", "projects", id);
-    if (fs.existsSync(projectDir)) fs.rmSync(projectDir, { recursive: true });
+    // Delete the project itself
+    await Project.findByIdAndDelete(id);
     
     res.json({ message: "Project deleted successfully" });
   } catch (error) {
@@ -107,9 +130,60 @@ export const deleteProject = async (req, res) => {
   }
 };
 
+// --- NEW Bulk Delete Function ---
+// @desc    Delete multiple projects
+// @route   POST /api/projects/delete-bulk
+export const deleteBulkProjects = async (req, res) => {
+  try {
+    const { projectIds } = req.body;
+    if (!Array.isArray(projectIds) || projectIds.length === 0) {
+      return res.status(400).json({ message: 'projectIds must be a non-empty array.' });
+    }
+
+    let deletedCount = 0;
+    const errors = [];
+
+    // Loop and delete one by one to ensure ownership and proper asset cleanup
+    for (const id of projectIds) {
+      try {
+        const project = await Project.findById(id);
+        if (!project) {
+          errors.push(`Project ${id} not found.`);
+          continue;
+        }
+        // Check ownership
+        if (project.userId.toString() !== req.user.id) {
+          errors.push(`Not authorized to delete project ${id}.`);
+          continue;
+        }
+        
+        // Use the helper to clean up assets
+        await deleteProjectAssets(id);
+        
+        // Delete the project itself
+        await Project.findByIdAndDelete(id);
+        deletedCount++;
+      } catch (err) {
+        errors.push(`Failed to delete project ${id}: ${err.message}`);
+      }
+    }
+
+    res.json({ 
+      message: `Successfully deleted ${deletedCount} projects.`,
+      errors
+    });
+  } catch (error) {
+    res.status(400).json({ message: 'Error during bulk delete', error: error.message });
+  }
+};
+// ---
+
+// --- HEAVILY UPDATED listProjects ---
+// @desc    List and categorize all projects for the dashboard
+// @route   GET /api/projects
 export const listProjects = async (req, res) => {
   try {
-    // --- ADDED AUTH: Only find projects for this user ---
+    // Only find projects for this user
     const projects = await Project.find({ userId: req.user.id }).sort({ createdAt: -1 });
 
     // Attach post counts for a richer UI
@@ -120,17 +194,36 @@ export const listProjects = async (req, res) => {
       return { ...p.toObject(), pending, posted, failed };
     }));
 
-    res.json(projectsWithCounts);
+    // --- New Categorization Logic ---
+    const active = []; // Running or Paused
+    const pendingStopped = []; // Stopped but has pending posts
+    const completed = []; // Stopped and has NO pending posts
+
+    for (const p of projectsWithCounts) {
+      if (p.status === 'running' || p.status === 'paused') {
+        active.push(p);
+      } else if (p.status === 'stopped' && p.pending > 0) {
+        pendingStopped.push(p);
+      } else if (p.status === 'stopped' && p.pending === 0) {
+        completed.push(p);
+      }
+    }
+    // ---
+
+    res.json({ active, pendingStopped, completed });
+
   } catch (error) {
     res.status(400).json({ message: 'Error listing projects', error: error.message });
   }
 };
+// ---
 
-// --- NEW Endpoint ---
+// @desc    Get a single project by ID (for details page)
+// @route   GET /api/projects/:id
 export const getProjectById = async (req, res) => {
   try {
     const { id } = req.params;
-    const project = await getProjectAndCheckOwnership(id, req.user.id); // --- ADDED AUTH ---
+    const project = await getProjectAndCheckOwnership(id, req.user.id);
     
     const posts = await Post.find({ projectId: id }).sort({ scheduledAt: 1 });
     
