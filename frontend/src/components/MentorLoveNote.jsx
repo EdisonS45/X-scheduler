@@ -5,7 +5,7 @@ export default function MentorLoveNote() {
   return (
     <div className="bg-gradient-to-br from-slate-50 to-white rounded-2xl shadow-2xl overflow-hidden md:flex md:max-w-6xl mx-auto border border-slate-200">
       
-      {/* Image Section - Full Image Display, No Cropping */}
+      {/* Image Section */}
       <div className="md:w-1/2 bg-slate-100 flex items-center justify-center p-8">
         <img
           src={CodeFictionImage}
@@ -21,18 +21,19 @@ export default function MentorLoveNote() {
         </h2>
 
         <p className="text-slate-700 leading-relaxed mb-4 text-[1.05rem]">
-          The <span className="font-medium text-slate-900">X Scheduler</span> project was born from the ideas and vision of my amazing mentor. 
-          What started as his spark of inspiration turned into reality through his constant guidance and belief in me.
+          The <span className="font-medium text-slate-900">X Scheduler</span> project began with an idea shared by my mentor — 
+          something that sparked the start of many exciting projects ahead. 
+          What you see here is just the beginning of where that inspiration can lead.
         </p>
 
         <p className="text-slate-700 leading-relaxed mb-6 text-[1.05rem]">
           This small tribute — <span className="italic text-slate-900">“Code Fiction: His Vision. My Code.”</span> — 
-          is my way of saying thank you for everything. Your mentorship made this journey of learning and building truly special.
+          is my way of saying thank you for being the reason I keep building and learning with purpose.
         </p>
 
         <div className="mt-4 border-t border-slate-200 pt-4">
           <p className="text-sm text-slate-500 italic">
-            — With deep respect and gratitude, <br />
+            — With gratitude and respect, <br />
             <span className="font-medium text-slate-600 not-italic">Edison S</span>
           </p>
         </div>
