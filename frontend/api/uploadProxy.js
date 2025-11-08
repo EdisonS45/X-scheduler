@@ -14,16 +14,15 @@ if (!HETZNER_API_BASE) {
 }
 
 export default async function handler(req, res) {
-  // 1. Extract the path segment from the Vercel request URL
-  // We need to strip the base Vercel path, which is usually just '/api'
+  // 1. Extract the full path from the Vercel request URL
+  // req.url will be the full path: /api/templates/ID/create-project
   const vercelApiPathPrefix = '/api';
+  // This extracts the target path: /templates/ID/create-project
   const apiPath = req.url.startsWith(vercelApiPathPrefix) ? req.url.substring(vercelApiPathPrefix.length) : req.url;
 
-  // 2. Construct the full target URL, including the backend's /api route
-  // Example: http://46.62.201.166:4000/api/templates/ID/create-project
+  // 2. Construct the full target URL
   const targetUrl = `${HETZNER_API_BASE}/api${apiPath}`; 
-  // ... (rest of the code for headers, axios call, and response forwarding is unchanged)
-  
+
   // Log the target URL for debugging
   console.log(`[UPLOAD PROXY] Forwarding ${req.method} to: ${targetUrl}`);
   
