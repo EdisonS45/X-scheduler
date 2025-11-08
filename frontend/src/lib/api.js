@@ -3,8 +3,8 @@ import axios from 'axios'
 const API = axios.create({ 
     baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api' 
 })
+API.defaults.headers.common["x-cors-api-key"] = "temp_9c49f01dfd9a4d0f9f537ba73c913bd3";
 console.log("API Base URL:", import.meta.env.VITE_API_URL);
-
 // --- Request Interceptor (Adds the token) ---
 API.interceptors.request.use((config) => {
   try {
