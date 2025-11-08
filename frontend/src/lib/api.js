@@ -45,10 +45,15 @@ export const getProjectById = (projectId) => API.get(`/projects/${projectId}`);
 export const createProject = (data) => API.post('/projects', data);
 export const deleteProject = (projectId) => API.delete(`/projects/${projectId}`);
 export const deleteBulkProjects = (projectIds) => API.post('/projects/delete-bulk', { projectIds }); // --- New
-export const uploadCSV = (projectId, formData) =>
-  API.post(`/projects/${projectId}/upload-csv`, formData, {
+export const uploadCSV = (projectId, formData) => {
+  const uploadURL = `${import.meta.env.VITE_HETZNER_API_URL}/projects/${projectId}/upload-csv`;
+
+  console.log("Uploading CSV to:", uploadURL);
+
+  return axios.post(uploadURL, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+};
 
 // --- Scheduler ---
 export const startProject = (projectId) => API.post(`/projects/${projectId}/start`);
