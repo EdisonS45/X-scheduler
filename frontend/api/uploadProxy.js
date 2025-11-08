@@ -18,10 +18,9 @@ export default async function handler(req, res) {
   // req.url will be the full path: /api/templates/ID/create-project
   const vercelApiPathPrefix = '/api';
   // This extracts the target path: /templates/ID/create-project
-  const apiPath = req.url.startsWith(vercelApiPathPrefix) ? req.url.substring(vercelApiPathPrefix.length) : req.url;
-
+const pathFromQuery = req.query.path || '';
   // 2. Construct the full target URL
-  const targetUrl = `${HETZNER_API_BASE}/api${apiPath}`; 
+  const targetUrl = `${HETZNER_API_BASE}/api${pathFromQuery}`; 
 
   // Log the target URL for debugging
   console.log(`[UPLOAD PROXY] Forwarding ${req.method} to: ${targetUrl}`);
