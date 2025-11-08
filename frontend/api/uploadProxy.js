@@ -1,5 +1,4 @@
 import axios from 'axios';
-
 // VITE_HETZNER_API_URL should be set to: http://46.62.201.166:4000
 const HETZNER_API_BASE = process.env.VITE_HETZNER_API_URL; 
 
@@ -16,18 +15,19 @@ if (!HETZNER_API_BASE) {
 
 export default async function handler(req, res) {
   // 1. Extract the path segment from the Vercel request URL
-  // req.url will be the full path: /api/templates/ID/create-project
+  // We need to strip the base Vercel path, which is usually just '/api'
   const vercelApiPathPrefix = '/api';
   const apiPath = req.url.startsWith(vercelApiPathPrefix) ? req.url.substring(vercelApiPathPrefix.length) : req.url;
 
   // 2. Construct the full target URL, including the backend's /api route
   // Example: http://46.62.201.166:4000/api/templates/ID/create-project
   const targetUrl = `${HETZNER_API_BASE}/api${apiPath}`; 
-
+  // ... (rest of the code for headers, axios call, and response forwarding is unchanged)
+  
   // Log the target URL for debugging
   console.log(`[UPLOAD PROXY] Forwarding ${req.method} to: ${targetUrl}`);
   
-  // CORS Headers
+  // CORS Headers (Unchanged)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -40,21 +40,19 @@ export default async function handler(req, res) {
   try {
     const headers = {
       'Authorization': req.headers.authorization || '',
-      // CRITICAL: Forward the original Content-Type header
       'Content-Type': req.headers['content-type'], 
       'Accept-Encoding': 'identity',
     };
 
-    // Forward the ENTIRE raw request stream directly to the backend
     const response = await axios({
       method: req.method,
       url: targetUrl,
       headers: headers,
-      data: req, // The raw request stream is passed directly as data
+      data: req, 
       responseType: 'arraybuffer'
     });
 
-    // Forward the backend's response
+    // Forward the backend's response (Unchanged)
     res.status(response.status);
     Object.keys(response.headers).forEach(key => {
         if (key.toLowerCase() !== 'transfer-encoding' && key.toLowerCase() !== 'content-encoding') {
