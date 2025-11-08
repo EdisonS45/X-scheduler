@@ -103,19 +103,25 @@ export default function Dashboard() {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmSingleDelete = async (id) => {
+const confirmSingleDelete = async (id) => {
     setDeleteLoading(true);
     try {
-      await deleteProject(id);
-      await fetchAllData();
-      closeDeleteModal();
+      const res = await deleteProject(id); // This will now return instantly
+      
+      closeDeleteModal(); // Close the modal right away
+      
+      // Show the "Accepted" message from the backend
+      openInfoModal("Deletion Started", res.data.message, 'info');
+      
+      // Refresh the UI to show the item is gone
+      await fetchAllData(); 
+      
     } catch (err) {
       if (err.response?.status !== 401) {
         openInfoModal("Delete Error", err.response?.data?.message || err.message, 'error');
       }
     } finally {
-      // --- THIS IS THE FIX for Bug 2 ---
-      setDeleteLoading(false); 
+      setDeleteLoading(false); // Reset loading state
     }
   };
   
@@ -130,18 +136,33 @@ export default function Dashboard() {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmBulkDelete = async (projectIds) => {
+const confirmBulkDelete = async (projectIds) => {
     setDeleteLoading(true);
     try {
-      await deleteBulkProjects(projectIds);
+      const res = await deleteBulkProjects(projectIds); 
+      
+      let messageTitle = "Success";
+      let messageBody = res.data.message;
+      let messageLevel = 'info';
+
+      // Check if there were any partial errors reported by the backend
+      if (res.data.errors && res.data.errors.length > 0) {
+        messageTitle = "Partial Success with Errors";
+        messageBody = `${res.data.message}. Errors encountered: ${res.data.errors.join('; ')}`;
+        messageLevel = 'error';
+      }
+
+      openInfoModal(messageTitle, messageBody, messageLevel);
+      
       await fetchAllData();
       closeDeleteModal();
     } catch (err) {
+      // Catch network errors or 400-level errors
       if (err.response?.status !== 401) {
         openInfoModal("Bulk Delete Error", err.response?.data?.message || err.message, 'error');
       }
     } finally {
-      // --- THIS IS THE FIX for Bug 2 ---
+      // --- FIX: This line MUST execute to stop the 'Deleting...' freeze ---
       setDeleteLoading(false);
     }
   };
