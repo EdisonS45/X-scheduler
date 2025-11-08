@@ -10,40 +10,38 @@ import templateRoutes from './routes/templateRoutes.js'
 import { connectDB } from './config/db.js'
 import { startWorkersForRunningProjects } from './jobs/workerManager.js'
 
-// Get __dirname equivalent in ES Modules
+// --- Get __dirname equivalent in ES Modules ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+// ---
 
 dotenv.config()
 const app = express()
-// CORS is simplified since we are serving from the same host, 
-// but we keep a generic config in case you need local API calls during development.
-app.use(cors()); 
+app.use(cors()); // Keep generic CORS for local development/testing
 app.use(express.json())
 
-// --- API Routes ---
-// API routes MUST be defined *before* serving the frontend
+// --- API Routes (MUST be defined first) ---
 app.use('/api/auth', authRoutes)
 app.use('/api/projects', projectRoutes)
 app.use('/api/templates', templateRoutes)
 
-// --- Production Frontend Hosting ---
-// This code is now unconditional, as it runs on the single host
-// We assume you have run 'npm run build' in the frontend directory.
+// --- Frontend Hosting Logic ---
+// 1. Define the path to the frontend's build directory (located at X-scheduler/frontend/dist)
 const frontendDistPath = path.join(__dirname, '../../frontend/dist');
 
-// 1. Serve all static files (js, css, images) from the 'dist' folder on the root path
+// 2. Serve all static files (JS, CSS, images) from the 'dist' folder on the root path
+// This handles requests like /assets/index-CoK_IbJm.js
 app.use(express.static(frontendDistPath));
 
-// 2. For any other route (SPA routes like /login, /project/:id), serve the 'index.html' file
-// This is the key to fixing 404s and enabling the frontend router
+// 3. SPA Fallback: For any other route (like /login or /dashboard), serve index.html
+// This fixes the 404 Not Found error on direct access or refresh.
 app.get('*', (req, res) => {
-    // Only send the file if the request is not for the API or a static file already served
+    // We only serve index.html if the request is NOT for an existing API route
     if (!req.path.startsWith('/api')) {
         res.sendFile(path.resolve(frontendDistPath, 'index.html'));
     }
 });
-// ---
+// --- End Frontend Hosting Logic ---
 
 const PORT = process.env.PORT || 4000
 
