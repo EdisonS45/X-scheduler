@@ -1,33 +1,33 @@
-// File: frontend/api/uploadProxy.js
-// This function is designed EXCLUSIVELY to handle multipart/form-data file uploads.
-
 import axios from 'axios';
 
-// Get the base URL (e.g., http://46.62.201.166:4000)
+// VITE_HETZNER_API_URL should be set to: http://46.62.201.166:4000
 const HETZNER_API_BASE = process.env.VITE_HETZNER_API_URL; 
 
-if (!HETZNER_API_BASE) {
-  throw new Error('VITE_HETZNER_API_URL environment variable is not set.');
-}
-
-// --- CRITICAL FIX: Tell Vercel to disable body parsing ---
-// This prevents Vercel from corrupting the incoming file stream.
+// CRITICAL FIX: Tell Vercel to disable body parsing
 export const config = {
   api: {
     bodyParser: false, 
   },
 };
-// ---
+
+if (!HETZNER_API_BASE) {
+  throw new Error('VITE_HETZNER_API_URL environment variable is not set.');
+}
 
 export default async function handler(req, res) {
-  // The path must be read from the query string defined in vercel.json
-  const proxyPath = req.query.path || ''; 
-  const targetUrl = `${HETZNER_API_BASE}/api/${proxyPath}`;
-  
+  // 1. Extract the path segment from the Vercel request URL
+  // req.url will be the full path: /api/templates/ID/create-project
+  const vercelApiPathPrefix = '/api';
+  const apiPath = req.url.startsWith(vercelApiPathPrefix) ? req.url.substring(vercelApiPathPrefix.length) : req.url;
+
+  // 2. Construct the full target URL, including the backend's /api route
+  // Example: http://46.62.201.166:4000/api/templates/ID/create-project
+  const targetUrl = `${HETZNER_API_BASE}/api${apiPath}`; 
+
   // Log the target URL for debugging
   console.log(`[UPLOAD PROXY] Forwarding ${req.method} to: ${targetUrl}`);
   
-  // CORS Headers (Must be present for pre-flight OPTIONS check and the main request)
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
   try {
     const headers = {
       'Authorization': req.headers.authorization || '',
-      // CRITICAL: We forward the original Content-Type header which contains the boundary data
+      // CRITICAL: Forward the original Content-Type header
       'Content-Type': req.headers['content-type'], 
       'Accept-Encoding': 'identity',
     };
@@ -66,7 +66,6 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error(`[UPLOAD PROXY ERROR] Target URL: ${targetUrl}`, error.message);
     if (error.response) {
-      // Forward the backend's error response (e.g., 400, 401, 500)
       res.status(error.response.status).send(error.response.data);
     } else {
       res.status(502).json({ message: 'Proxy Error: Could not connect to Hetzner backend for file upload.' });
