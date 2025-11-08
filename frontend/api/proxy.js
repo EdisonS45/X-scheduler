@@ -1,24 +1,26 @@
 import axios from 'axios';
 
-// The URL of your Hetzner backend. Should be http://46.62.201.166:4000/api
+// IMPORTANT: This environment variable MUST NOT have /api at the end.
+// Vercel should be set to: http://46.62.201.166:4000
 const HETZNER_API_BASE = process.env.VITE_HETZNER_API_URL; 
 
+// --- CRITICAL FIX 1: Tell Vercel to disable body parsing ---
+export const config = {
+  api: {
+    bodyParser: false, 
+  },
+};
+// ---
+
 if (!HETZNER_API_BASE) {
-  // If the variable isn't set, this will return a server error
   throw new Error('VITE_HETZNER_API_URL environment variable is not set.');
 }
 
 export default async function handler(req, res) {
-  // --- FIX: Safely read the path from the Vercel rewrite parameter ---
   const proxyPath = req.query.path || ''; 
-  
-  // Construct the full HTTP target URL (Vercel rewrite handles the '/api' prefix implicitly)
-  const targetUrl = `${HETZNER_API_BASE}/${proxyPath}`;
+  // Target URL will be http://46.62.201.166:4000/api/auth/login
+  const targetUrl = `${HETZNER_API_BASE}/api/${proxyPath}`;
 
-  // Log the target URL for server debugging
-  console.log(`[PROXY] Forwarding ${req.method} to: ${targetUrl}`);
-
-  // 1. Pre-flight CORS handling (Crucial for Vercel to allow the frontend fetch)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -29,38 +31,36 @@ export default async function handler(req, res) {
   }
   
   try {
+    const headers = {
+      'Authorization': req.headers.authorization || '',
+      // FIX 2: Do NOT include content-type for multipart data—axios will get it from the stream headers
+      'Content-Type': req.headers['content-type'], 
+      'Accept-Encoding': 'identity',
+    };
+
+    // --- FIX 3: Forward the entire raw request object as the data stream ---
     const response = await axios({
       method: req.method,
       url: targetUrl,
-      // Pass along the Authorization token
-      headers: {
-        'Authorization': req.headers.authorization || '',
-        'Content-Type': req.headers['content-type'] || 'application/json',
-        'Accept-Encoding': 'identity',
-      },
-      // Pass the body for POST/PUT/DELETE
-      data: req.body,
+      headers: headers,
+      data: req, // The raw request stream is passed directly
       responseType: 'arraybuffer'
     });
 
-    // 2. Forward response status and headers from Hetzner back to the Vercel frontend
     res.status(response.status);
     Object.keys(response.headers).forEach(key => {
         if (key.toLowerCase() !== 'transfer-encoding' && key.toLowerCase() !== 'content-encoding') {
             res.setHeader(key, response.headers[key]);
         }
     });
-
-    // 3. Send the response body
     res.send(response.data);
 
   } catch (error) {
     console.error(`[PROXY ERROR] Target URL: ${targetUrl}`, error.message);
     if (error.response) {
-      // Forward the backend's error response (e.g., 400, 401, 429)
       res.status(error.response.status).send(error.response.data);
     } else {
-      res.status(502).json({ message: 'Proxy Error: Could not reach the Hetzner backend.' });
+      res.status(502).json({ message: 'Proxy Error: Could not connect to the Hetzner backend. Check firewall/server status.' });
     }
   }
 }
