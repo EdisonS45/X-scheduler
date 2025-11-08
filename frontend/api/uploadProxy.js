@@ -1,31 +1,32 @@
 import axios from 'axios';
-// VITE_HETZNER_API_URL should be set to: http://46.62.201.166:4000
+
+// This environment variable MUST be set to: http://46.62.201.166:4000
 const HETZNER_API_BASE = process.env.VITE_HETZNER_API_URL; 
 
-// CRITICAL FIX: Tell Vercel to disable body parsing
+// --- CRITICAL FIX 1: Tell Vercel to disable body parsing for file streams ---
 export const config = {
   api: {
     bodyParser: false, 
   },
 };
+// ---
 
 if (!HETZNER_API_BASE) {
   throw new Error('VITE_HETZNER_API_URL environment variable is not set.');
 }
 
 export default async function handler(req, res) {
-  // 1. Extract the full path from the Vercel request URL
-  // req.url will be the full path: /api/templates/ID/create-project
-  const vercelApiPathPrefix = '/api';
-  // This extracts the target path: /templates/ID/create-project
-const pathFromQuery = req.query.path || '';
-  // 2. Construct the full target URL
-  const targetUrl = `${HETZNER_API_BASE}/api${pathFromQuery}`; 
+  // 1. Read the full path from the query parameter set by vercel.json
+  // Example pathFromQuery: templates/690eeaca1ae5e1364a25e643/create-project
+  const pathFromQuery = req.query.path || '';
 
-  // Log the target URL for debugging
+  // 2. Construct the full target URL, including the backend's /api route
+  // Example targetUrl: http://46.62.201.166:4000/api/templates/ID/create-project
+  const targetUrl = `${HETZNER_API_BASE}/api/${pathFromQuery}`; 
+
   console.log(`[UPLOAD PROXY] Forwarding ${req.method} to: ${targetUrl}`);
   
-  // CORS Headers (Unchanged)
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -38,15 +39,16 @@ const pathFromQuery = req.query.path || '';
   try {
     const headers = {
       'Authorization': req.headers.authorization || '',
-      'Content-Type': req.headers['content-type'], 
+      'Content-Type': req.headers['content-type'], // CRITICAL: Forward the original Content-Type
       'Accept-Encoding': 'identity',
     };
 
+    // Forward the raw request stream as the data for file upload
     const response = await axios({
       method: req.method,
       url: targetUrl,
       headers: headers,
-      data: req, 
+      data: req, // Raw request stream
       responseType: 'arraybuffer'
     });
 
