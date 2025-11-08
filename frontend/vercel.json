@@ -1,6 +1,15 @@
 {
   "rewrites": [
     {
+      "source": "/api/projects/(.*)/upload-csv",
+      "destination": "/api/uploadProxy?path=projects/$1/upload-csv"
+    },
+    {
+      "source": "/api/templates/(.*)/create-project",
+      "destination": "/api/uploadProxy?path=templates/$1/create-project"
+    },
+    
+    {
       "source": "/api/(.*)",
       "destination": "/api/proxy?path=$1"
     },
