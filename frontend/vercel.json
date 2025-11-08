@@ -1,8 +1,12 @@
 {
   "rewrites": [
     {
-      "source": "/api/(.*)/(.*)/(.*)",
-      "destination": "/api/uploadProxy?path=$1/$2/$3" 
+      "source": "/api/templates/:id/create-project",
+      "destination": "/api/uploadProxy?path=templates/:id/create-project"
+    },
+    {
+      "source": "/api/projects/:id/upload-csv",
+      "destination": "/api/uploadProxy?path=projects/:id/upload-csv"
     },
     
     {

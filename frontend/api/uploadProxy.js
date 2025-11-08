@@ -1,9 +1,9 @@
 import axios from 'axios';
 
-// This environment variable MUST be set to: http://46.62.201.166:4000
+// VITE_HETZNER_API_URL should be set to: http://46.62.201.166:4000
 const HETZNER_API_BASE = process.env.VITE_HETZNER_API_URL; 
 
-// --- CRITICAL FIX 1: Tell Vercel to disable body parsing for file streams ---
+// --- CRITICAL FIX: Tell Vercel to disable body parsing for file streams ---
 export const config = {
   api: {
     bodyParser: false, 
@@ -17,7 +17,6 @@ if (!HETZNER_API_BASE) {
 
 export default async function handler(req, res) {
   // 1. Read the full path from the query parameter set by vercel.json
-  // Example pathFromQuery: templates/690eeaca1ae5e1364a25e643/create-project
   const pathFromQuery = req.query.path || '';
 
   // 2. Construct the full target URL, including the backend's /api route
@@ -39,7 +38,8 @@ export default async function handler(req, res) {
   try {
     const headers = {
       'Authorization': req.headers.authorization || '',
-      'Content-Type': req.headers['content-type'], // CRITICAL: Forward the original Content-Type
+      // CRITICAL: Forward the original Content-Type header with the file boundary
+      'Content-Type': req.headers['content-type'], 
       'Accept-Encoding': 'identity',
     };
 
@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       responseType: 'arraybuffer'
     });
 
-    // Forward the backend's response (Unchanged)
+    // Forward the backend's response
     res.status(response.status);
     Object.keys(response.headers).forEach(key => {
         if (key.toLowerCase() !== 'transfer-encoding' && key.toLowerCase() !== 'content-encoding') {
