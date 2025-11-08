@@ -11,9 +11,8 @@
     
     {
       "source": "/api/(.*)",
-      "destination": "/api/proxy"
+      "destination": "/api/proxy?path=$1"
     },
-    
     {
       "source": "/(.*)",
       "destination": "/index.html"
