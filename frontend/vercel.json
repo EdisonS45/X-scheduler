@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    {
+{
       "source": "/api/projects/(.*)/upload-csv",
       "destination": "/api/uploadProxy"
     },
