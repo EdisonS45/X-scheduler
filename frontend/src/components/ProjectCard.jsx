@@ -1,42 +1,42 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { 
-  PlayIcon, 
-  PauseIcon, 
-  StopIcon, 
-  TrashIcon, 
+import {
+  PlayIcon,
+  PauseIcon,
+  StopIcon,
+  TrashIcon,
   ArrowTopRightOnSquareIcon,
   CheckCircleIcon,
   XCircleIcon,
   ClockIcon
 } from '@heroicons/react/24/solid'
 
-// --- New Status Indicator Component ---
+// --- Status Indicator ---
 const StatusIndicator = ({ status }) => {
-  let colorClass = 'bg-slate-400 text-slate-800';
-  let text = 'Stopped';
-  let dotClass = 'bg-slate-500';
+  let colorClass = 'bg-slate-400 text-slate-800'
+  let text = 'Stopped'
+  let dotClass = 'bg-slate-500'
 
   if (status === 'running') {
-    colorClass = 'bg-green-100 text-green-800';
-    text = 'Running';
-    dotClass = 'bg-green-500 animate-pulse';
+    colorClass = 'bg-green-100 text-green-800'
+    text = 'Running'
+    dotClass = 'bg-green-500 animate-pulse'
   } else if (status === 'paused') {
-    colorClass = 'bg-yellow-100 text-yellow-800';
-    text = 'Paused';
-    dotClass = 'bg-yellow-500';
+    colorClass = 'bg-yellow-100 text-yellow-800'
+    text = 'Paused'
+    dotClass = 'bg-yellow-500'
   }
-  
+
   return (
     <div className={`inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>
-      <span className={`h-2 w-2 rounded-full ${dotClass}`}></span>
+      <span className={`h-2 w-2 rounded-full ${dotClass}`} />
       {text}
     </div>
   )
 }
 
-// --- New Stat Component ---
-const StatCard = ({ icon, label, value, colorClass = 'text-slate-500' }) => (
+// --- Stat Card ---
+const StatCard = ({ icon, label, value, colorClass }) => (
   <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-md">
     {React.cloneElement(icon, { className: `h-5 w-5 ${colorClass}` })}
     <div>
@@ -46,10 +46,28 @@ const StatCard = ({ icon, label, value, colorClass = 'text-slate-500' }) => (
   </div>
 )
 
-export default function ProjectCard({ project, onStart, onPause, onStop, onDelete }){
-  
-  const handleResume = () => onStop(project._id);
-  const hasPendingPosts = project.pending > 0;
+export default function ProjectCard({ project, onStart, onPause, onStop, onDelete }) {
+  const [actionLoading, setActionLoading] = useState(null)
+
+  const hasPendingPosts = project.pending > 0
+
+  const runIdAction = async (type, fn) => {
+    setActionLoading(type)
+    try {
+      await fn(project._id)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const runDelete = async () => {
+    setActionLoading('delete')
+    try {
+      await onDelete(project) // ✅ PASS FULL PROJECT
+    } finally {
+      setActionLoading(null)
+    }
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col justify-between transition-all hover:shadow-xl">
@@ -60,7 +78,7 @@ export default function ProjectCard({ project, onStart, onPause, onStop, onDelet
           </h3>
           <StatusIndicator status={project.status} />
         </div>
-        
+
         <p className="text-sm text-slate-500 mb-4">
           Posts every {project.timeGapMinutes} minutes
         </p>
@@ -73,68 +91,72 @@ export default function ProjectCard({ project, onStart, onPause, onStop, onDelet
       </div>
 
       <div className="bg-slate-50 p-3 grid grid-cols-2 gap-2">
-        {/* --- Primary Actions (Start/Pause/Resume) --- */}
+
+        {/* START */}
         {project.status === 'stopped' && (
-          <button 
-            onClick={() => onStart(project._id)} 
-            disabled={!hasPendingPosts} 
-            className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
-            title={!hasPendingPosts ? "No pending posts to start" : "Start project"}
+          <button
+            disabled={!hasPendingPosts || actionLoading}
+            onClick={() => runIdAction('start', onStart)}
+            className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:bg-slate-300"
           >
             <PlayIcon className="h-5 w-5" />
-            Start Project
+            {actionLoading === 'start' ? 'Starting…' : 'Start Project'}
           </button>
         )}
 
+        {/* PAUSE */}
         {project.status === 'running' && (
-          <button 
-            onClick={() => onPause(project._id)} 
-            disabled={!hasPendingPosts}
-            className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-yellow-500 text-white text-sm font-medium hover:bg-yellow-600 disabled:bg-slate-300 disabled:cursor-not-allowed"
+          <button
+            disabled={actionLoading}
+            onClick={() => runIdAction('pause', onPause)}
+            className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-yellow-500 text-white text-sm font-medium hover:bg-yellow-600"
           >
             <PauseIcon className="h-5 w-5" />
-            Pause Project
-          </button>
-        )}
-        
-        {project.status === 'paused' && (
-          <button 
-            onClick={handleResume}
-            disabled={!hasPendingPosts}
-            className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
-            title={!hasPendingPosts ? "No pending posts to resume" : "Resume project"}
-          >
-            <PlayIcon className="h-5 w-5" />
-            Resume Project
+            {actionLoading === 'pause' ? 'Pausing…' : 'Pause Project'}
           </button>
         )}
 
-        {/* --- Secondary Actions (Fixed Color) --- */}
-        <Link 
+        {/* RESUME */}
+        {project.status === 'paused' && (
+          <button
+            disabled={actionLoading}
+            onClick={() => runIdAction('stop', onStop)}
+            className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+          >
+            <PlayIcon className="h-5 w-5" />
+            {actionLoading === 'stop' ? 'Resuming…' : 'Resume Project'}
+          </button>
+        )}
+
+        {/* VIEW */}
+        <Link
           to={`/project/${project._id}`}
-          // FIX: Uses Indigo colors by default
           className="flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-indigo-50 text-indigo-700 text-sm font-medium border border-indigo-200 hover:bg-indigo-100"
         >
           <ArrowTopRightOnSquareIcon className="h-4 w-4" />
           View
         </Link>
-        <button 
-          onClick={() => onDelete(project)} 
-          // FIX: Uses Red colors by default
+
+        {/* DELETE */}
+        <button
+          disabled={actionLoading}
+          onClick={runDelete}
           className="flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-red-50 text-red-700 text-sm font-medium border border-red-200 hover:bg-red-100"
         >
           <TrashIcon className="h-4 w-4" />
-          Delete
+          {actionLoading === 'delete' ? 'Deleting…' : 'Delete'}
         </button>
-        
+
+        {/* STOP IMMEDIATELY */}
         {project.status === 'running' && (
-           <button 
-              onClick={() => onStop(project._id)} 
-              className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700"
-            >
-              <StopIcon className="h-5 w-5" />
-              Stop Immediately
-            </button>
+          <button
+            disabled={actionLoading}
+            onClick={() => runIdAction('stop', onStop)}
+            className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700"
+          >
+            <StopIcon className="h-5 w-5" />
+            {actionLoading === 'stop' ? 'Stopping…' : 'Stop Immediately'}
+          </button>
         )}
       </div>
     </div>

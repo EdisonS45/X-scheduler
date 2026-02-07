@@ -13,7 +13,7 @@ const getProjectAndQueue = async (projectId, userId) => {
   if (project.userId.toString() !== userId.toString()) {
     throw new Error('User not authorized for this project');
   }
-  
+
   const queue = new Queue(`queue_${projectId}`, { connection: redis });
   return { project, queue };
 };
@@ -22,86 +22,76 @@ const getProjectAndQueue = async (projectId, userId) => {
 // @route   POST /api/projects/:id/start
 export const startProjectScheduler = async (req, res) => {
   const { id } = req.params;
+
   try {
     const { project, queue } = await getProjectAndQueue(id, req.user.id);
 
+    // Block only if THIS project is already running
     if (project.status === 'running') {
       return res.status(400).json({ message: 'Project is already running' });
     }
 
-    // --- UPDATED: Smarter Duplicate Project Check ---
-    const otherRunningProjects = await Project.find({
-      _id: { $ne: id }, // Not this project
-      userId: req.user.id, // For this user
-      status: 'running', // That is currently running
-      twitterApiKey: project.twitterApiKey // With the same API key
-    });
+    // 1. Find pending posts
+    const posts = await Post.find({
+      projectId: id,
+      status: 'pending'
+    }).sort({ createdAt: 'asc' });
 
-    if (otherRunningProjects.length > 0) {
-      for (const otherProject of otherRunningProjects) {
-        // Check if this "running" project *actually* has pending posts
-        const pendingCount = await Post.countDocuments({ projectId: otherProject._id, status: 'pending' });
-        
-        if (pendingCount > 0) {
-          // This is a *true* conflict.
-          return res.status(400).json({ 
-            message: `Another project ('${otherProject.name}') is already running with these Twitter credentials. Please stop that project first.` 
-          });
-        } else {
-          // This is a "zombie" project that finished but wasn't auto-stopped. Fix it.
-          console.log(`[Project: ${otherProject._id}] Was 'running' but has no pending posts. Setting to 'stopped'.`);
-          otherProject.status = 'stopped';
-          await otherProject.save();
-        }
-      }
-    }
-    // --- End of updated check ---
-
-    // 1. Find all pending posts
-    const posts = await Post.find({ projectId: id, status: 'pending' }).sort({ createdAt: 'asc' });
     if (posts.length === 0) {
-      return res.status(400).json({ message: 'No pending posts to schedule. Please upload a new CSV.' });
+      return res.status(400).json({
+        message: 'No pending posts to schedule. Please upload a new CSV.'
+      });
     }
 
-    // 2. Clear any old jobs from the queue to start fresh
+    // 2. Clear any old jobs
     await queue.obliterate({ force: true });
 
-    // 3. Add all pending posts to the queue with a delay
+    // 3. Schedule posts
     const timeGapMs = project.timeGapMinutes * 60 * 1000;
     let delay = 0;
 
     for (const post of posts) {
-      const jobData = { postId: post._id, content: post.content };
-      await queue.add(post._id.toString(), jobData, { 
-        delay: delay,
-        removeOnComplete: true, 
-        removeOnFail: 50, // Keep last 50 failed jobs
-        // Retry logic for 429 errors
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 60000, // 1 minute
+      await queue.add(
+        post._id.toString(),
+        {
+          postId: post._id,
+          content: post.content
+        },
+        {
+          delay,
+          removeOnComplete: true,
+          removeOnFail: 50,
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 60000
+          }
         }
-      });
-      // Update post with scheduled time
+      );
+
       post.scheduledAt = new Date(Date.now() + delay);
       await post.save();
-      
+
       delay += timeGapMs;
     }
 
-    // 4. Start the worker for this queue
+    // 4. Start worker
     startWorker(id);
 
     // 5. Update project status
     project.status = 'running';
     await project.save();
 
-    res.json({ message: `Project started with ${posts.length} posts scheduled.` });
+    res.json({
+      message: `Project started with ${posts.length} posts scheduled.`
+    });
 
   } catch (error) {
     console.error(error);
-    res.status(400).json({ message: 'Error starting project', error: error.message });
+    res.status(400).json({
+      message: 'Error starting project',
+      error: error.message
+    });
   }
 };
 
@@ -109,6 +99,7 @@ export const startProjectScheduler = async (req, res) => {
 // @route   POST /api/projects/:id/pause
 export const pauseProjectScheduler = async (req, res) => {
   const { id } = req.params;
+
   try {
     const { project, queue } = await getProjectAndQueue(id, req.user.id);
 
@@ -121,8 +112,12 @@ export const pauseProjectScheduler = async (req, res) => {
     await project.save();
 
     res.json({ message: 'Project paused' });
+
   } catch (error) {
-    res.status(400).json({ message: 'Error pausing project', error: error.message });
+    res.status(400).json({
+      message: 'Error pausing project',
+      error: error.message
+    });
   }
 };
 
@@ -130,11 +125,12 @@ export const pauseProjectScheduler = async (req, res) => {
 // @route   POST /api/projects/:id/stop
 export const stopProjectScheduler = async (req, res) => {
   const { id } = req.params;
+
   try {
     const { project, queue } = await getProjectAndQueue(id, req.user.id);
 
+    // Resume if paused
     if (project.status === 'paused') {
-      // This action will RESUME a paused project
       await queue.resume();
       project.status = 'running';
       await project.save();
@@ -144,25 +140,31 @@ export const stopProjectScheduler = async (req, res) => {
     if (project.status !== 'running') {
       return res.status(400).json({ message: 'Project is not running' });
     }
-    
-    // 1. Stop the worker process
+
+    // 1. Stop worker
     await stopWorker(id);
 
-    // 2. Empty the queue of all pending (delayed) jobs
+    // 2. Drain queue
     await queue.drain(true);
 
     // 3. Update project status
     project.status = 'stopped';
     await project.save();
-    
-    // 4. Update all pending posts back to 'pending' and clear scheduledAt
+
+    // 4. Reset scheduled posts
     await Post.updateMany(
       { projectId: id, status: 'pending' },
-      { $set: { status: 'pending' }, $unset: { scheduledAt: "" } }
+      { $unset: { scheduledAt: '' } }
     );
 
-    res.json({ message: 'Project stopped and all pending jobs cleared.' });
+    res.json({
+      message: 'Project stopped and all pending jobs cleared.'
+    });
+
   } catch (error) {
-    res.status(400).json({ message: 'Error stopping project', error: error.message });
+    res.status(400).json({
+      message: 'Error stopping project',
+      error: error.message
+    });
   }
 };
