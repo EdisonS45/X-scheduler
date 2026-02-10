@@ -1,7 +1,7 @@
 import { TwitterApi } from 'twitter-api-v2';
 
 /**
- * OAuth client used ONLY for login / token exchange (PKCE)
+ * OAuth client used for PKCE login
  */
 export const getOAuthClient = () => {
   const { TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET } = process.env;
@@ -17,42 +17,49 @@ export const getOAuthClient = () => {
 };
 
 /**
- * Authenticated client for a connected Twitter account
- * Used for posting tweets, fetching user data, etc.
+ * Returns an authenticated client for a user
+ * Handles OAuth2 refresh correctly
  */
-export const getUserClient = ({ accessToken, refreshToken }) => {
-  if (!accessToken || !refreshToken) {
-    throw new Error('Missing Twitter account tokens');
+export const getUserClient = async (twitterAccount) => {
+  const { refreshToken } = twitterAccount;
+
+  if (!refreshToken) {
+    throw new Error('Missing refresh token');
   }
 
-  return new TwitterApi({
-    accessToken,
-    refreshToken,
+  const baseClient = new TwitterApi({
     clientId: process.env.TWITTER_CLIENT_ID,
     clientSecret: process.env.TWITTER_CLIENT_SECRET,
   });
+
+  const {
+    client,
+    accessToken,
+    refreshToken: newRefreshToken,
+    expiresIn,
+  } = await baseClient.refreshOAuth2Token(refreshToken);
+
+  // 🔁 rotate tokens (VERY important for production)
+  twitterAccount.accessToken = accessToken;
+  twitterAccount.refreshToken = newRefreshToken;
+  twitterAccount.tokenExpiresAt = new Date(Date.now() + expiresIn * 1000);
+  await twitterAccount.save();
+
+  return client;
 };
 
 /**
- * Post a tweet on behalf of a connected Twitter account
- * This is what your worker / scheduler will call
+ * Safe tweet posting (used by workers)
  */
 export const postToTwitter = async (twitterAccount, content) => {
   if (!content || typeof content !== 'string') {
-    throw new Error('Tweet content is invalid');
+    throw new Error('Invalid tweet content');
   }
 
-  const client = getUserClient({
-    accessToken: twitterAccount.accessToken,
-    refreshToken: twitterAccount.refreshToken,
-  });
-
   try {
+    const client = await getUserClient(twitterAccount);
     await client.v2.tweet(content);
   } catch (err) {
-    /**
-     * Important: normalize Twitter errors so workers can retry safely
-     */
     const message =
       err?.data?.detail ||
       err?.data?.title ||
