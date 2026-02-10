@@ -2,6 +2,7 @@ import { verifyToken } from '../utils/jwt.js';
 import User from '../models/user.js';
 
 export const protect = async (req, res, next) => {
+    console.log('🛑 protect middleware hit:', req.method, req.originalUrl);
   try {
     const header = req.headers.authorization;
 

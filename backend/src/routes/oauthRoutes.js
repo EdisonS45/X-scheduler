@@ -1,6 +1,5 @@
 import express from 'express';
 import { protect } from '../middleware/authMiddleware.js';
-
 import {
   startTwitterOAuth,
   finishTwitterOAuth,
@@ -8,13 +7,10 @@ import {
 
 const router = express.Router();
 
-// All OAuth actions require a logged-in user
-router.use(protect);
+// STEP 1: user must be logged in
+router.get('/twitter/start', protect, startTwitterOAuth);
 
-// Step 1: Get redirect URL
-router.get('/twitter/start', startTwitterOAuth);
-
-// Step 2: Callback from Twitter
+// STEP 2: Twitter callback (NO AUTH)
 router.get('/twitter/callback', finishTwitterOAuth);
 
 export default router;
