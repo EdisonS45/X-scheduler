@@ -38,6 +38,7 @@ export const finishTwitterOAuth = async (req, res) => {
   const oauthClient = getOAuthClient();
 
   const {
+    client,
     accessToken,
     refreshToken,
     expiresIn,
@@ -47,10 +48,7 @@ export const finishTwitterOAuth = async (req, res) => {
     redirectUri: process.env.TWITTER_CALLBACK_URL,
   });
 
-  // ✅ IMPORTANT: create USER client
-  const userClient = new TwitterApi(accessToken);
-
-  const twitterUser = await userClient.v2.me();
+  const twitterUser = await client.v2.me();
 
   const account = await TwitterAccount.findOneAndUpdate(
     { twitterUserId: twitterUser.data.id },
@@ -69,3 +67,4 @@ export const finishTwitterOAuth = async (req, res) => {
 
   res.json({ connected: true, account });
 };
+
