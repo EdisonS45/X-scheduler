@@ -1,41 +1,66 @@
-import Post from '../models/post.js';
-import Project from '../models/project.js';
-import TwitterAccount from '../models/TwitterAccount.js';
-import { postToTwitter } from '../utils/twitterClient.js';
-import { autoStopIfFinished } from './jobUtils.js';
+import { TwitterApi } from 'twitter-api-v2';
 
-export const processPostJob = async (job) => {
-  const { postId, projectId } = job.data;
+/**
+ * OAuth client used ONLY for login / token exchange (PKCE)
+ */
+export const getOAuthClient = () => {
+  const { TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET } = process.env;
 
-  const post = await Post.findById(postId);
-  if (!post || post.status !== 'pending') return;
-
-  const project = await Project.findById(projectId);
-  if (!project || project.status !== 'running') return;
-
-  const twitterAccount = await TwitterAccount.findById(
-    project.twitterAccountId
-  ).select('+accessToken +refreshToken');
-
-  if (!twitterAccount || !twitterAccount.isActive) {
-    post.status = 'failed';
-    post.failureReason = 'Twitter account not connected';
-    await post.save();
-    return;
+  if (!TWITTER_CLIENT_ID || !TWITTER_CLIENT_SECRET) {
+    throw new Error('Twitter OAuth env vars missing');
   }
 
-  try {
-    await postToTwitter(twitterAccount, post.content);
+  return new TwitterApi({
+    clientId: TWITTER_CLIENT_ID,
+    clientSecret: TWITTER_CLIENT_SECRET,
+  });
+};
 
-    post.status = 'posted';
-    post.postedAt = new Date();
-    await post.save();
+/**
+ * Authenticated client for a connected Twitter account
+ * Used for posting tweets, fetching user data, etc.
+ */
+export const getUserClient = ({ accessToken, refreshToken }) => {
+  if (!accessToken || !refreshToken) {
+    throw new Error('Missing Twitter account tokens');
+  }
+
+  return new TwitterApi({
+    accessToken,
+    refreshToken,
+    clientId: process.env.TWITTER_CLIENT_ID,
+    clientSecret: process.env.TWITTER_CLIENT_SECRET,
+  });
+};
+
+/**
+ * Post a tweet on behalf of a connected Twitter account
+ * This is what your worker / scheduler will call
+ */
+export const postToTwitter = async (twitterAccount, content) => {
+  if (!content || typeof content !== 'string') {
+    throw new Error('Tweet content is invalid');
+  }
+
+  const client = getUserClient({
+    accessToken: twitterAccount.accessToken,
+    refreshToken: twitterAccount.refreshToken,
+  });
+
+  try {
+    await client.v2.tweet(content);
   } catch (err) {
-    post.status = 'failed';
-    post.failureReason = err.message;
-    await post.save();
-    throw err; // BullMQ retry
-  } finally {
-    await autoStopIfFinished(projectId);
+    /**
+     * Important: normalize Twitter errors so workers can retry safely
+     */
+    const message =
+      err?.data?.detail ||
+      err?.data?.title ||
+      err?.message ||
+      'Twitter API error';
+
+    const error = new Error(message);
+    error.code = err.code;
+    throw error;
   }
 };
