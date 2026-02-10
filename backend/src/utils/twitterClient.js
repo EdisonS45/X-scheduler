@@ -1,41 +1,29 @@
 import { TwitterApi } from 'twitter-api-v2';
 
-/**
- * OAuth client (NO user tokens here)
- * Used only for connect / refresh flows
- */
 export const getOAuthClient = () => {
-  if (
-    !process.env.TWITTER_CLIENT_ID ||
-    !process.env.TWITTER_CLIENT_SECRET
-  ) {
+  const {
+    TWITTER_CLIENT_ID,
+    TWITTER_CLIENT_SECRET,
+  } = process.env;
+
+  if (!TWITTER_CLIENT_ID || !TWITTER_CLIENT_SECRET) {
     throw new Error('Twitter OAuth env vars missing');
   }
 
   return new TwitterApi({
-    clientId: process.env.TWITTER_CLIENT_ID,
-    clientSecret: process.env.TWITTER_CLIENT_SECRET,
+    clientId: TWITTER_CLIENT_ID,
+    clientSecret: TWITTER_CLIENT_SECRET,
   });
 };
 
 /**
- * Post a tweet on behalf of a connected Twitter account
- * Uses stored access + refresh tokens
+ * Create a client from stored user tokens (AFTER OAuth)
  */
-export const postToTwitter = async (account, content) => {
-  if (!account?.accessToken) {
-    throw new Error('Twitter account not connected');
-  }
-
-  const client = new TwitterApi({
-    accessToken: account.accessToken,
-    refreshToken: account.refreshToken,
+export const getUserClient = ({ accessToken, refreshToken }) => {
+  return new TwitterApi({
+    accessToken,
+    refreshToken,
     clientId: process.env.TWITTER_CLIENT_ID,
     clientSecret: process.env.TWITTER_CLIENT_SECRET,
   });
-
-  // Automatically refresh token if needed
-  const rwClient = client.readWrite();
-
-  await rwClient.v2.tweet(content);
 };
