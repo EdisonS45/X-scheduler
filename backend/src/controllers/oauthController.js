@@ -1,7 +1,27 @@
-import { TwitterApi } from 'twitter-api-v2';
 import OAuthState from '../models/OAuthState.js';
 import TwitterAccount from '../models/TwitterAccount.js';
 import { getOAuthClient } from '../utils/twitterClient.js';
+import { TwitterApi } from 'twitter-api-v2';
+
+export const startTwitterOAuth = async (req, res) => {
+    const client = getOAuthClient();
+
+    const { url, codeVerifier, state } =
+        client.generateOAuth2AuthLink(process.env.TWITTER_CALLBACK_URL, {
+            scope: ['tweet.read', 'tweet.write', 'users.read', 'offline.access'],
+        });
+
+    // Store state in DB (10 min expiry)
+    await OAuthState.create({
+        userId: req.user.id,
+        provider: 'twitter',
+        state,
+        codeVerifier,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    res.json({ url });
+};
 
 export const finishTwitterOAuth = async (req, res) => {
   const { state, code } = req.query;
