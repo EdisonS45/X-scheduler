@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
-import session from 'express-session';
 import { fileURLToPath } from 'url';
 
 import projectRoutes from './routes/projectRoutes.js';
@@ -21,36 +20,17 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-app.use(cors({
-  origin: true,
-  credentials: true,
-}));
-
+app.use(cors());
 app.use(express.json());
 
-/* 🔐 SESSION MIDDLEWARE — MUST COME BEFORE ROUTES */
-app.use(
-  session({
-    name: 'x-scheduler-session',
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 1000 * 60 * 10, // 10 minutes
-    },
-  })
-);
-
-/* ROUTES */
+// API routes
 app.use('/api/oauth', oauthRoutes);
+
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/templates', templateRoutes);
 
-/* Frontend static serving */
+// Frontend static serving (safe)
 const frontendDistPath = path.join(__dirname, '../../frontend/dist');
 app.use(express.static(frontendDistPath));
 
@@ -62,6 +42,7 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 4000;
 
+// 🔐 Boot sequence (correct order)
 (async () => {
   try {
     await connectDB();
