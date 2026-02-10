@@ -2,30 +2,47 @@ import mongoose from 'mongoose';
 
 const postSchema = new mongoose.Schema(
   {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
+
     projectId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Project',
-      index: true,
       required: true,
+      index: true,
     },
 
     content: {
       type: String,
       required: true,
+      trim: true,
       maxlength: 280,
     },
 
-    scheduledAt: Date,
-    postedAt: Date,
-
-    status: {
-      type: String,
-      enum: ['pending', 'posted', 'failed'],
-      default: 'pending',
+    scheduledAt: {
+      type: Date,
+      required: true,
       index: true,
     },
 
-    failureReason: String,
+    postedAt: {
+      type: Date,
+    },
+
+    status: {
+      type: String,
+      enum: ['scheduled', 'posted', 'failed'],
+      default: 'scheduled',
+      index: true,
+    },
+
+    errorMessage: {
+      type: String,
+    },
   },
   { timestamps: true }
 );

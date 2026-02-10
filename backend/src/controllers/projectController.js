@@ -2,10 +2,78 @@ import Project from '../models/project.js';
 import Post from '../models/post.js';
 import TwitterAccount from '../models/TwitterAccount.js';
 
+
 /**
- * Create Project
- * POST /api/projects
+ * START a project (campaign)
  */
+/**
+ * Start a project (begin scheduling)
+ */
+export const startProject = async (req, res) => {
+  const project = await Project.findOne({
+    _id: req.params.id,
+    userId: req.user.id,
+  });
+
+  if (!project) {
+    return res.status(404).json({ message: 'Project not found' });
+  }
+
+  if (project.status === 'running') {
+    return res.status(400).json({ message: 'Project already running' });
+  }
+
+  project.status = 'running';
+  await project.save();
+
+  res.json({ message: 'Project started', project });
+};
+
+/**
+ * Pause a running project
+ */
+export const pauseProject = async (req, res) => {
+  const project = await Project.findOne({
+    _id: req.params.id,
+    userId: req.user.id,
+  });
+
+  if (!project) {
+    return res.status(404).json({ message: 'Project not found' });
+  }
+
+  if (project.status !== 'running') {
+    return res.status(400).json({
+      message: 'Only running projects can be paused',
+    });
+  }
+
+  project.status = 'paused';
+  await project.save();
+
+  res.json({ message: 'Project paused', project });
+};
+
+/**
+ * Stop a project completely
+ */
+export const stopProject = async (req, res) => {
+  const project = await Project.findOne({
+    _id: req.params.id,
+    userId: req.user.id,
+  });
+
+  if (!project) {
+    return res.status(404).json({ message: 'Project not found' });
+  }
+
+  project.status = 'stopped';
+  await project.save();
+
+  res.json({ message: 'Project stopped', project });
+};
+
+
 export const createProject = async (req, res) => {
   const { name, twitterAccountId, timeGapMinutes } = req.body;
 

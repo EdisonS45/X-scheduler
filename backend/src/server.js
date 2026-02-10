@@ -8,6 +8,8 @@ import projectRoutes from './routes/projectRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import templateRoutes from './routes/templateRoutes.js';
 import oauthRoutes from './routes/oauthRoutes.js';
+import twitterAccountRoutes from './routes/twitterAccountRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 
 import { connectDB } from './config/db.js';
 import { redis } from './config/redis.js';
@@ -29,6 +31,8 @@ app.use('/api/oauth', oauthRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/posts', postRoutes);
+app.use('/api/twitter-accounts', twitterAccountRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Frontend static serving (safe)
 const frontendDistPath = path.join(__dirname, '../../frontend/dist');
