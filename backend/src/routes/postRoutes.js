@@ -1,17 +1,13 @@
 import express from 'express';
 import { protect } from '../middleware/authMiddleware.js';
 import {
-  createProject,
-  listProjects,
-  getProjectById,
-} from '../controllers/projectController.js';
+  createPost,
+  bulkCreatePosts,
+} from '../controllers/postController.js';
 
 const router = express.Router();
 
-router.use(protect);
-
-router.post('/', createProject);
-router.get('/', listProjects);
-router.get('/:id', getProjectById);
+router.post('/', protect, createPost);
+router.post('/bulk', protect, bulkCreatePosts);
 
 export default router;

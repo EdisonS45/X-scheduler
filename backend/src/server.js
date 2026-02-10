@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
+import postRoutes from './routes/postRoutes.js';
 import projectRoutes from './routes/projectRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import templateRoutes from './routes/templateRoutes.js';
@@ -24,11 +24,11 @@ app.use(cors());
 app.use(express.json());
 
 // API routes
-app.use('/api/oauth', oauthRoutes);
-
 app.use('/api/auth', authRoutes);
+app.use('/api/oauth', oauthRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/templates', templateRoutes);
+app.use('/api/posts', postRoutes);
 
 // Frontend static serving (safe)
 const frontendDistPath = path.join(__dirname, '../../frontend/dist');
