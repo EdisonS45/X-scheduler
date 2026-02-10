@@ -1,20 +1,41 @@
-import { TwitterApi } from 'twitter-api-v2'
+import { TwitterApi } from 'twitter-api-v2';
 
-export const postToTwitter = async (project, content) => {
-  // project contains twitterApiKey, twitterApiSecret, twitterAccessToken, twitterAccessSecret
-  // NOTE: ensure you have proper developer access. For testing, you can mock this function.
-  if(!project.twitterApiKey) {
-    console.log('No API key configured for project, skipping (mock)')
-    return
+/**
+ * OAuth client (NO user tokens here)
+ * Used only for connect / refresh flows
+ */
+export const getOAuthClient = () => {
+  if (
+    !process.env.TWITTER_CLIENT_ID ||
+    !process.env.TWITTER_CLIENT_SECRET
+  ) {
+    throw new Error('Twitter OAuth env vars missing');
+  }
+
+  return new TwitterApi({
+    clientId: process.env.TWITTER_CLIENT_ID,
+    clientSecret: process.env.TWITTER_CLIENT_SECRET,
+  });
+};
+
+/**
+ * Post a tweet on behalf of a connected Twitter account
+ * Uses stored access + refresh tokens
+ */
+export const postToTwitter = async (account, content) => {
+  if (!account?.accessToken) {
+    throw new Error('Twitter account not connected');
   }
 
   const client = new TwitterApi({
-    appKey: project.twitterApiKey,
-    appSecret: project.twitterApiSecret,
-    accessToken: project.twitterAccessToken,
-    accessSecret: project.twitterAccessSecret,
-  })
+    accessToken: account.accessToken,
+    refreshToken: account.refreshToken,
+    clientId: process.env.TWITTER_CLIENT_ID,
+    clientSecret: process.env.TWITTER_CLIENT_SECRET,
+  });
 
-  // v2 tweet
-  await client.v2.tweet(content)
-}
+  // Automatically refresh token if needed
+  const rwClient = client.readWrite();
+
+  await rwClient.v2.tweet(content);
+};
