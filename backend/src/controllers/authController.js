@@ -1,80 +1,119 @@
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import User from '../models/user.js';
+import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
+import User from '../models/user.js'
+import TwitterAccount from '../models/TwitterAccount.js'
 
-const generateToken = (userId) =>
-  jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-    expiresIn: '30d',
-  });
+const generateToken = (user) =>
+  jwt.sign(
+    {
+      id: user._id,
+      email: user.email,
+      provider: user.authProvider,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '30d' }
+  )
+
+const buildAuthResponse = async (user) => {
+  const hasConnectedTwitter = await TwitterAccount.exists({
+    userId: user._id,
+    isActive: true,
+  })
+
+  return {
+    user: {
+      id: user._id,
+      email: user.email,
+      authProvider: user.authProvider,
+      hasConnectedTwitter: !!hasConnectedTwitter,
+    },
+    token: generateToken(user),
+  }
+}
 
 /**
- * REGISTER (LOCAL)
+ * REGISTER
  */
 export const registerUser = async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password required' });
+    if (!email || !password) {
+      return res.status(400).json({
+        message: 'Email and password are required',
+      })
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        message: 'Password must be at least 8 characters',
+      })
+    }
+
+    const existing = await User.findOne({ email })
+    if (existing) {
+      return res.status(409).json({
+        message: 'Account already exists',
+      })
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12)
+
+    const user = await User.create({
+      email,
+      passwordHash,
+      authProvider: 'local',
+    })
+
+    const response = await buildAuthResponse(user)
+
+    res.status(201).json(response)
+  } catch (err) {
+    console.error('Register error:', err)
+    res.status(500).json({ message: 'Server error' })
   }
-
-  const existing = await User.findOne({ email });
-  if (existing) {
-    return res.status(400).json({ message: 'User already exists' });
-  }
-
-  const passwordHash = await bcrypt.hash(password, 12);
-
-  const user = await User.create({
-    email,
-    passwordHash, // ✅ CORRECT FIELD
-    authProvider: 'local',
-  });
-
-  res.status(201).json({
-    id: user._id,
-    email: user.email,
-    token: generateToken(user._id),
-  });
-};
+}
 
 /**
- * LOGIN (LOCAL)
+ * LOGIN
  */
 export const loginUser = async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password required' });
+    if (!email || !password) {
+      return res.status(400).json({
+        message: 'Email and password required',
+      })
+    }
+
+    const user = await User.findOne({ email }).select('+passwordHash')
+
+    if (!user) {
+      return res.status(401).json({
+        message: 'Invalid email or password',
+      })
+    }
+
+    if (user.authProvider !== 'local') {
+      return res.status(400).json({
+        message: `Please login using ${user.authProvider}`,
+      })
+    }
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash)
+
+    if (!isMatch) {
+      return res.status(401).json({
+        message: 'Invalid email or password',
+      })
+    }
+
+    const response = await buildAuthResponse(user)
+
+    res.json(response)
+  } catch (err) {
+    console.error('Login error:', err)
+    res.status(500).json({ message: 'Server error' })
   }
-
-  // IMPORTANT: explicitly include passwordHash
-  const user = await User.findOne({ email }).select('+passwordHash');
-
-  if (!user) {
-    return res.status(401).json({ message: 'Invalid credentials' });
-  }
-
-  if (user.authProvider !== 'local') {
-    return res.status(400).json({
-      message: `Use ${user.authProvider} login instead`,
-    });
-  }
-
-  if (!user.passwordHash) {
-    return res.status(500).json({
-      message: 'Password not set for this account',
-    });
-  }
-
-  const isMatch = await bcrypt.compare(password, user.passwordHash);
-
-  if (!isMatch) {
-    return res.status(401).json({ message: 'Invalid credentials' });
-  }
-
-  res.json({
-    id: user._id,
-    email: user.email,
-    token: generateToken(user._id),
-  });
-};
+}

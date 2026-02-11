@@ -33,6 +33,10 @@ const twitterAccountSchema = new mongoose.Schema(
       required: true,
       select: false,
     },
+    profileImage: {
+  type: String,
+},
+
 
     tokenExpiresAt: {
       type: Date,
